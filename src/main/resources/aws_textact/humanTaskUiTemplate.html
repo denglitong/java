@@ -1,0 +1,548 @@
+{% capture document_s3_uri %}{{ task.input.documentS3Uri }}{% endcapture %}
+
+{% capture input_json_s3_uri %}{{ task.input.inputJsonS3Uri }}{% endcapture %}
+
+<div id="rootContainer"></div>
+<script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.12.313/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/htm@3.1.0/dist/htm.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/preact@8.5.3/dist/preact.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/preact-compat@3.18.5/dist/preact-compat.min.js"></script>
+<script>
+  // TODO: use a bundler to produce a minified & upgradable JS bundle file
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.12.313/build/pdf.worker.min.js";
+
+  (async () => {
+    const html = htm.bind(preactCompat.createElement);
+
+    // `grant_read_access` will generate HTML-escaped strings
+    const inputJson = await fetch(
+        _.unescape("{{ input_json_s3_uri | grant_read_access }}")
+    ).then((response) => response.json());
+
+    const keyValuePairBlockIds = new Set(inputJson.keyValuePairBlockIds || []);
+    const initialValue = inputJson.blocks;
+    _.remove(
+        initialValue,
+        (block) =>
+            block.blockType === "KEY_VALUE_SET" &&
+            block.entityTypes &&
+            block.entityTypes[0] === "KEY" &&
+            !keyValuePairBlockIds.has(block.id)
+    );
+    const blockLUT = _.keyBy(initialValue, "id");
+    const {keyIssues, valueIssues} = inputJson;
+
+    //#region Load & render PDF
+    const pdf = await pdfjsLib.getDocument({
+      url: _.unescape("{{ document_s3_uri | grant_read_access }}"),
+      cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.12.313/cmaps/",
+      cMapPacked: true,
+      enableXfa: true,
+    }).promise;
+    const scale = 1.5;
+    const outputScale = window.devicePixelRatio || 1;
+    const transform =
+        outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+
+    // Render each page into a canvas
+    const renderPromises = [];
+    for (let i = 0; i < pdf.numPages; i += 1) {
+      renderPromises.push(
+          new Promise(async (resolve) => {
+            const page = await pdf.getPage(i + 1);
+            const viewport = page.getViewport({scale});
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            canvas.width = Math.floor(viewport.width * outputScale);
+            canvas.height = Math.floor(viewport.height * outputScale);
+            await page.render({
+              canvasContext: context,
+              transform,
+              viewport,
+            }).promise;
+            canvas.toBlob(
+                (blob) => {
+                  resolve(URL.createObjectURL(blob));
+                },
+                "image/png",
+                1
+            );
+          })
+      );
+    }
+    let currentPage = 1;
+    const pageBlobUrls = await Promise.all(renderPromises);
+    //#endregion
+
+    //#region Render links to document guides
+    // TODO: upload to our own S3 bucket with CDN enabled
+    const documentGuides = {
+      "Discl Regard Real Estate Agency Relationship | Sale - PRDS Home":
+          "https://user-images.githubusercontent.com/5107241/153417445-1f5d9fb2-a7bd-4bb5-97c1-7e77238fe683.png",
+      "CCPA-Consumer Privacy Act Advisory | Sale - CAR Home":
+          "https://user-images.githubusercontent.com/5107241/153417415-4f1bf951-f193-4070-9322-c58b09116969.png",
+      "CCPA-Consumer Privacy Act Advisory | Sale - PRDS Home":
+          "https://user-images.githubusercontent.com/5107241/153417424-0529cc2e-53aa-47b5-9ca4-aef79cf37dee.jpeg",
+      "Compass Affiliated Business Arrangement Disclosure | Sale - CA Home (ALL)":
+          "https://user-images.githubusercontent.com/5107241/153417430-5275af0e-cab0-4ca5-9a12-47a59d852481.jpeg",
+      "Compass Seller or Tenant Ack. (Secure Belongings) | Sale - CA Home (ALL)":
+          "https://user-images.githubusercontent.com/5107241/153417434-6cd1ad26-1037-4b70-951d-3c0a73d6f25b.jpeg",
+      "FHDA-Fair Housing & Discrimination Advisory | Sale - CAR Home":
+          "https://user-images.githubusercontent.com/5107241/153417438-4b7c7dcf-cc09-4e7f-96a3-112437bec0ad.jpeg",
+      "WFA (L)-Wire Fraud Advisory (Listing) | Sale - CA Home (ALL)":
+          "https://user-images.githubusercontent.com/5107241/153417443-7a40b28d-e4b4-44c1-b70f-5df0a29a205b.jpeg",
+    };
+    let guideKey = inputJson.checkListItemCategories
+        .map((category) => `${inputJson.checkListItemName} | ${category}`)
+        .find((guideKey) => documentGuides[guideKey]);
+    let guideUrl = guideKey ? documentGuides[guideKey] : undefined;
+    if (!guideUrl) {
+      guideKey = inputJson.checkListItemName;
+      guideUrl = documentGuides[guideKey];
+    }
+    //#endregion
+
+    //#region Render Main UI
+    const escapedInitialValue = _.escape(JSON.stringify(inputJson.blocks));
+    const escapedKeys = _.escape(JSON.stringify(inputJson.importantFormKeys));
+
+    const container = document.getElementById("rootContainer");
+    container.innerHTML = `<crowd-form>
+        <crowd-textract-analyze-document
+            src="${pageBlobUrls[0]}"
+            initial-value="${escapedInitialValue}"
+            header="Review the key-value pairs listed on the right and correct them if they don't match the following document."
+            no-key-edit
+            no-geometry-edit
+            keys="${escapedKeys}"
+            block-types="['KEY_VALUE_SET']"
+        >
+            <short-instructions header="Instructions">
+            <style>
+                .instructions {
+                  white-space: pre-wrap;
+                }
+                .instructionsImage {
+                  display: inline-block;
+                  max-width: 100%;
+                }
+            </style>
+            ${
+        guideUrl
+            ? `<p>
+                <a href="${guideUrl}" target="_blank" rel="noopener noreferrer" onclick="window.openFullInstructionModal(); return false;">Click to view the guide</a> for this document (${guideKey}).
+              </p>`
+            : ""
+    }
+            <p class='instructions'>Click on a key-value block to highlight the corresponding key-value pair in the document.
+
+If it is a valid key-value pair, review the content for the value. If the content is incorrect, correct it.
+
+If the text of the value is incorrect, correct it.
+<img class='instructionsImage' src="https://assets.crowd.aws/images/a2i-console/correct-value-text.png" width="100%" />
+
+If a wrong value is identified, correct it.
+<img class='instructionsImage' src="https://assets.crowd.aws/images/a2i-console/correct-value.png" width="100%" />
+
+If it is not a valid key-value relationship, choose <b>No</b>.
+<img class='instructionsImage' src="https://assets.crowd.aws/images/a2i-console/not-a-key-value-pair.png" width="100%" />
+
+If you can’t find the key in the document, choose <b>Key not found</b>.
+<img class='instructionsImage' src="https://assets.crowd.aws/images/a2i-console/key-is-not-found.png" width="100%" />
+
+If the content of a field is empty, choose <b>Value is blank</b>.
+<img class='instructionsImage' src="https://assets.crowd.aws/images/a2i-console/value-is-blank.png" width="100%" />
+
+<b>Examples</b>
+The key and value are often displayed next or below to each other.
+
+For example, key and value displayed in one line.
+<img class='instructionsImage' src="https://assets.crowd.aws/images/a2i-console/sample-key-value-pair-1.png" width="100%" />
+
+For example, key and value displayed in two lines.
+<img class='instructionsImage' src="https://assets.crowd.aws/images/a2i-console/sample-key-value-pair-2.png" width="100%" />
+
+If the content of the value has multiple lines, enter all the text without a line break. Include all value text, even if it extends beyond the highlighted box.
+<img class='instructionsImage' src="https://assets.crowd.aws/images/a2i-console/multiple-lines.png" width="100%" /></p>
+            </short-instructions>
+
+            ${
+        guideUrl
+            ? `<full-instructions header="Instructions">
+              <img src="${guideUrl}" style="width: 100%;">
+            </full-instructions>`
+            : ""
+    }
+        </crowd-textract-analyze-document>
+    </crowd-form>`;
+
+    const rootNode = document.querySelector("crowd-textract-analyze-document");
+
+    function setCurrentPage(page) {
+      if (page < 1 || page > pdf.numPages) {
+        return false;
+      }
+      currentPage = page;
+      rootNode.setAttribute("src", pageBlobUrls[page - 1]);
+      return true;
+    }
+
+    //#endregion
+
+    //#region Hook into the redux store to watch for state changes
+    const reduxStore =
+        rootNode.shadowRoot.querySelector(".label-pane")._component.props.context
+            .store;
+    let lastActiveLabelId;
+    reduxStore.subscribe(() => {
+      const state = reduxStore.getState();
+      const activeLabelId = state.label.activeLabelId;
+      if (lastActiveLabelId === activeLabelId) {
+        return;
+      }
+      lastActiveLabelId = activeLabelId;
+      const block = blockLUT[state.label.labels[activeLabelId].key];
+      setCurrentPage(block.page);
+    });
+    //#endregion
+
+    //#region Render extra UI under each key-value pair input
+    class KeyValuePairComplementUI extends preactCompat.Component {
+      constructor() {
+        super();
+        this.state = {
+          feedbackExpanded: false,
+        };
+      }
+
+      render(props, state) {
+        const {keyId} = props;
+        return html`
+          <div>
+            ${valueIssues[keyId] &&
+            html`<p style="color: #f4ab00">${valueIssues[keyId]}</p>`}
+            ${!state.feedbackExpanded &&
+            html`
+              <awsui-checkbox class="" initialized="true">
+                <label
+                    class="awsui-checkbox"
+                    for="awsui-checkbox-${keyId}"
+                    id="awsui-checkbox-${keyId}-label"
+                >
+                  <input
+                      class="awsui-checkbox-native-input"
+                      type="checkbox"
+                      override-focus=""
+                      id="awsui-checkbox-${keyId}"
+                      onchange=${() => {
+                        this.setState({feedbackExpanded: true});
+                        this.forceUpdate();
+                      }}
+                  />
+                  <div class="awsui-checkbox-styled-box">
+                    <svg viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+                      <rect
+                          x="0.5"
+                          y="0.5"
+                          rx="1.5"
+                          ry="1.5"
+                          width="13"
+                          height="13"
+                      ></rect>
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="awsui-checkbox-label" awsui-checkbox-region="label">
+                      <span><small>Add extra comments / feedbacks</small></span>
+                    </div>
+                  </div>
+                </label>
+              </awsui-checkbox>`}
+            ${state.feedbackExpanded &&
+            html`
+              <crowd-input
+                  data="feedback-for-${keyId}"
+                  label="Feedback"
+                  onClick=${(e) => e.stopPropagation()}
+                  onKeydown=${(e) => e.stopPropagation()}
+              ></crowd-input>`}
+          </div>`;
+      }
+    }
+
+    // Hook into <KeyValuePairCard>'s render() to add <KeyValuePairComplementUI>
+    rootNode.shadowRoot
+        .querySelectorAll(".label-button")
+        .forEach(({_component}) => {
+          _.update(
+              _component,
+              "render",
+              (render) =>
+                  function (props) {
+                    const {keyId} = props;
+                    const vnode = render.apply(this, arguments);
+                    vnode.children[0].children.push(
+                        html`
+                          <${KeyValuePairComplementUI} keyId=${keyId}/>`
+                    );
+                    return vnode;
+                  }
+          );
+        });
+    //#endregion
+
+    //#region Render key issues
+    class LabelPaneComplementUI extends preactCompat.Component {
+      render() {
+        return html`
+          <div>
+            ${Object.entries(keyIssues).map(
+                ([key, text]) => html`
+                  <div
+                      class="label-button"
+                      style="margin-bottom: 20px; padding: 10px;"
+                  >
+                    <div style="flex: 1 1 auto; overflow: hidden;">
+                      <div style="margin-bottom: 10px; font-weight: bold;">
+                        Please confirm:
+                      </div>
+                      <div style="margin-bottom: 10px;">${text}</div>
+                      <div style="margin-bottom: 10px;">
+                        <input
+                            type="radio"
+                            name="answer-for-key-issue-${key}"
+                            data-key=${key}
+                            value="yes"
+                            style="margin-right: 10px;"
+                        />Yes
+                        <input
+                            type="radio"
+                            name="answer-for-key-issue-${key}"
+                            data-key=${key}
+                            value="no"
+                            style="margin-left: 15px; margin-right: 10px;"
+                        />No
+                      </div>
+                    </div>
+                  </div>`
+            )}
+          </div>`;
+      }
+    }
+
+    // Hook into <LabelPane>'s render() to add <LabelPaneComplementUI>
+    const labelPaneComponent =
+        rootNode.shadowRoot.querySelector(".label-pane")._component._component
+            ._component;
+
+    _.update(
+        labelPaneComponent,
+        "render",
+        (render) =>
+            function (props) {
+              const {keyId} = props;
+              const vnode = render.apply(this, arguments);
+              vnode.children[2].children[0].children.unshift(
+                  html`
+                    <div style="padding: 10px;">
+                      <p style="font-size: 0.8rem;">
+                <span style="font-weight: bold;">Document Type:</span
+                ><br/>${guideKey}
+                      </p>
+                      ${guideUrl &&
+                      html`<p style="font-size: 0.8rem;">
+                        <a
+                            href=${guideUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick=${window.openFullInstructionModal}
+                        >
+                          Click to view the guide
+                        </a>
+                      ${" "}for this document.
+                      </p>`}
+                    </div>`
+              );
+              vnode.children[2].children[0].children.push(
+                  html`
+                    <${LabelPaneComplementUI}/>`
+              );
+              return vnode;
+            }
+    );
+    //#endregion
+
+    //#region Expose onGeneralInstructionsOpen() to window.openFullInstructionModal()
+    const cvLayout = rootNode.shadowRoot.querySelector(
+        "#react-mount-point > .awsui > .awsui"
+    )._component._component._component;
+    window.openFullInstructionModal = (e) => {
+      if (e) {
+        e.preventDefault();
+      }
+      cvLayout.props.onGeneralInstructionsOpen();
+    };
+    //#endregion
+
+    //#region Collect extra input values into <crowd-document-analysis>.value
+    const CrowdDocumentAnalysis = Object.getPrototypeOf(
+        Object.getPrototypeOf(rootNode)
+    );
+    const valueGetter = Object.getOwnPropertyDescriptor(
+        CrowdDocumentAnalysis,
+        "value"
+    ).get;
+    Object.defineProperty(CrowdDocumentAnalysis, "value", {
+      configurable: true,
+      get() {
+        const value = valueGetter.apply(this);
+        value.feedbacks = {};
+        rootNode.shadowRoot
+            .querySelectorAll("crowd-input[data^=feedback-for]")
+            .forEach((input) => {
+              const keyId = input.getAttribute("data").split("feedback-for-")[1];
+              if (!input.value) {
+                return;
+              }
+              value.feedbacks[keyId] = input.value;
+            });
+        const keyIssueAnswers = {};
+        rootNode.shadowRoot
+            .querySelectorAll("input[name^=answer-for-key-issue]")
+            .forEach((input) => {
+              if (!input.checked) {
+                return;
+              }
+              keyIssueAnswers[input.dataset["key"]] =
+                  input.value === "yes" ? true : false;
+            });
+        value.keyIssues = Object.entries(keyIssues).map(
+            ([detectionKey, reason]) => ({
+              detectionKey,
+              reason,
+              result: keyIssueAnswers[detectionKey],
+            })
+        );
+        return value;
+      },
+    });
+    _.update(
+        CrowdDocumentAnalysis,
+        "validate",
+        (validate) =>
+            function () {
+              let valid = validate.apply(this, arguments);
+              if (!valid) {
+                return false;
+              }
+              valid = this.value.keyIssues.every(
+                  (keyIssue) => keyIssue.result !== undefined
+              );
+              if (!valid) {
+                reduxStore.dispatch({
+                  type: "SET_AND_DISPLAY_ERROR_MESSAGE",
+                  errorContent: {
+                    header: "Some values are blank.",
+                    message:
+                        "Please make sure all `Please confirm:` questions are answered.",
+                    type: "warning",
+                    dismissable: true,
+                  },
+                });
+              }
+              return valid;
+            }
+    );
+    //#endregion
+
+    //#region Hook into <Tools>'s render() to add PDF page controls
+    setTimeout(() => {
+      function clearAnnotations() {
+        reduxStore.dispatch({
+          type: "SET_ANNOTATIONS",
+          annotations: [],
+          numberOfAnnotatedPixels: 0,
+          numberOfAnnotatedPixelsPerColor: {},
+        });
+      }
+
+      const connectedTools = rootNode.shadowRoot.querySelector(
+          "#toolsContainer > div"
+      )._component;
+      const tools = connectedTools._component;
+      _.update(
+          tools,
+          "getToolConfigs",
+          (getToolConfigs) =>
+              function () {
+                return [
+                  ...getToolConfigs.apply(this, arguments),
+                  {
+                    name: "page-up",
+                    action() {
+                      if (setCurrentPage(currentPage - 1)) {
+                        clearAnnotations();
+                      }
+                    },
+                    activeToolId: "page-up",
+                    icon: "samuraicons:undo",
+                    label: "Page Up",
+                    tooltip: "Page Up",
+                    keybind: "[",
+                    hotkey: html`
+                      <div>
+                        <div><span class="hotkey">[</span></div>
+                      </div>`,
+                  },
+                  {
+                    name: "page-down",
+                    action() {
+                      if (setCurrentPage(currentPage + 1)) {
+                        clearAnnotations();
+                      }
+                    },
+                    activeToolId: "page-down",
+                    icon: "samuraicons:redo",
+                    label: "Page Down",
+                    tooltip: "Page Down",
+                    keybind: "]",
+                    hotkey: html`
+                      <div>
+                        <div><span class="hotkey">]</span></div>
+                        <div
+                            style="position: relative; top: -21px; left: 73px; width: 0; white-space: nowrap;"
+                        >
+                          Page ${currentPage} of ${pdf.numPages}
+                        </div>
+                      </div>`,
+                  },
+                ];
+              }
+      );
+      _.update(
+          connectedTools,
+          "addExtraProps",
+          (addExtraProps) =>
+              function () {
+                const props = addExtraProps.apply(this, arguments);
+                props.availableTools = [
+                  "page-up",
+                  "page-down",
+                  "zoom-in",
+                  "zoom-out",
+                  "fit-image",
+                  "pan",
+                  "no-adjustment",
+                ];
+                return props;
+              }
+      );
+      connectedTools.forceUpdate();
+    }, 0);
+    //#endregion
+  })();
+</script>
