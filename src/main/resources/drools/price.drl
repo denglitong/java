@@ -1,0 +1,52 @@
+package drools;
+dialect  "mvel"
+
+import com.denglitong.drools_demo.entity.Product;
+import com.denglitong.drools_demo.entity.User;
+
+rule "Low Stock Discount"
+    // 设置规则执行优先级，数值越高优先级越高，用于同时匹配 2 条规则时声明执行顺序
+    salience 10
+    // agenda-group "stock"
+    when
+        $product: Product(stock < 10)
+    then
+        $product.setFinalPrice($product.getBasePrice() * 0.9);
+        System.out.println("Applying low stock discount for product: " + $product.getCategory());
+end
+
+rule "High Stock Increase"
+    salience 10
+    // agenda-group "stock"
+    when
+        $product: Product(stock > 100)
+    then
+        $product.setFinalPrice($product.getBasePrice() * 1.1);
+        System.out.println("Increasing price due to high stock for product: " + $product.getCategory());
+end
+
+rule "VIP User Low Stock Discount"
+    // 默认优先级是根据声明顺序的先后，如果同时匹配多条规则，默认执行顺序是按声明顺序的先后
+    salience 1
+    // 你还可以设置 agenda-group 分组，然后在 Java 代码中按显式先执行某个分组
+    // agenda-group "vip"
+    when
+        $user: User(type == "VIP")
+        $product: Product(stock < 10)
+    then
+        $product.setFinalPrice($product.getFinalPrice() * 0.9);
+        System.out.println("Applying VIP discount for user: " + $user.getType() + ", product: " + $product.getCategory());
+end
+
+rule "VIP User High Stock Discount"
+    // 默认优先级是根据声明顺序的先后，如果同时匹配多条规则，默认执行顺序是按声明顺序的先后
+    // 你还可以设置 agenda-group 分组，然后在 Java 代码中按显式先执行某个分组
+    // agenda-group "vip"
+    salience 1
+    when
+        $user: User(type == "VIP")
+        $product: Product(stock > 100)
+    then
+        $product.setFinalPrice($product.getFinalPrice() * 0.8);
+        System.out.println("Applying VIP discount for user: " + $user.getType() + ", product: " + $product.getCategory());
+end

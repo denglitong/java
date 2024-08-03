@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kmodule
+    xmlns="http://www.drools.org/xsd/kmodule">
+
+  <kbase name="greeting" packages="drools">
+    <ksession name="greeting"/>
+  </kbase>
+
+  <kbase name="price" packages="drools">
+    <ksession name="price"/>
+  </kbase>
+
+</kmodule>

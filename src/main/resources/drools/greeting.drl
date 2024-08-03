@@ -1,0 +1,31 @@
+package drools;
+dialect  "mvel"
+
+import com.denglitong.drools_demo.entity.Greeting;
+
+
+global java.util.List greetingList;
+
+rule "hello"
+    salience 1
+    when
+      m: Greeting(status == Greeting.HELLO, name: name)
+    then
+      System.out.println("HELLO rule apply for: " + name);
+      m.speak();
+
+    // when matching the rule `hello`, we can modify the model and get it matching another rule `goodbye`,
+    // in this way, a rule can transit to another rule chain
+    modify(m){
+      status = Greeting.GOODBYE
+    };
+end
+
+rule "goodbye"
+    salience 2
+    when
+      m: Greeting(status == Greeting.GOODBYE, name: name)
+    then
+      System.out.println("GOODBYE rule apply for: " + name);
+      m.speak();
+end
