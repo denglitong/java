@@ -23,7 +23,7 @@ public class UploadObjects {
       .build();
 
   public static void main(String[] args) throws URISyntaxException {
-    URL url = UploadObjects.class.getClassLoader().getResource("pdf_normal");
+    URL url = UploadObjects.class.getClassLoader().getResource("aws_s3");
     File[] files = new File(url.toURI()).listFiles();
 
     for (File file : files) {
