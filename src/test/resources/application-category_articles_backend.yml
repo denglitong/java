@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    driver-class-name: org.sqlite.JDBC
+    url: jdbc:sqlite:src/test/resources/category_articles.db
+    username:
+    password:
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
