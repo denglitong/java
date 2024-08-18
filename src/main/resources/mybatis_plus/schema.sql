@@ -1,3 +1,5 @@
+create database test;
+
 create table employee
 (
     id    int auto_increment
