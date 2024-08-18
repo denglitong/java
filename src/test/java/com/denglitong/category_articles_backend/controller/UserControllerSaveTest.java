@@ -1,11 +1,10 @@
 package com.denglitong.category_articles_backend.controller;
 
-import com.denglitong.category_articles_backend.Application;
+import com.denglitong.category_articles_backend.CategoryArticlesBackendApplication;
 import com.denglitong.category_articles_backend.DTO.ResponseDTO;
 import com.denglitong.category_articles_backend.DTO.UserDTO;
 import org.junit.Assert;
 import org.junit.Test;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.runner.RunWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
@@ -19,7 +18,7 @@ import static org.junit.Assert.assertNotNull;
  * @date 2021/10/28
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = Application.class)
+@SpringBootTest(classes = CategoryArticlesBackendApplication.class)
 @TestPropertySource(locations = "classpath:/category_articles_backend/application.yml")
 public class UserControllerSaveTest extends BaseControllerTest {
 

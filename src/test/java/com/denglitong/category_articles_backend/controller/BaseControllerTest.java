@@ -1,6 +1,6 @@
 package com.denglitong.category_articles_backend.controller;
 
-import com.denglitong.category_articles_backend.Application;
+import com.denglitong.category_articles_backend.CategoryArticlesBackendApplication;
 import com.denglitong.category_articles_backend.DTO.CategoryDTO;
 import com.denglitong.category_articles_backend.DTO.ResponseDTO;
 import com.denglitong.category_articles_backend.DTO.UserDTO;
@@ -18,7 +18,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -38,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @date 2021/10/28
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = Application.class)
+@SpringBootTest(classes = CategoryArticlesBackendApplication.class)
 @ActiveProfiles("category_articles_backend")
 public abstract class BaseControllerTest {
 

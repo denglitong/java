@@ -1,6 +1,6 @@
 package com.denglitong.category_articles_backend.controller;
 
-import com.denglitong.category_articles_backend.Application;
+import com.denglitong.category_articles_backend.CategoryArticlesBackendApplication;
 import com.denglitong.category_articles_backend.DTO.CategoryDTO;
 import com.denglitong.category_articles_backend.DTO.ResponseDTO;
 import com.denglitong.category_articles_backend.DTO.UserLoginDTO;
@@ -14,8 +14,6 @@ import org.junit.runner.RunWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import javax.annotation.PostConstruct;
@@ -28,7 +26,7 @@ import static org.junit.Assert.assertNotNull;
  * @date 2021/10/30
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = Application.class)
+@SpringBootTest(classes = CategoryArticlesBackendApplication.class)
 @OrderWith(OrderAnnotation.class)
 public class CategoryControllerSaveTest extends BaseControllerTest {
 

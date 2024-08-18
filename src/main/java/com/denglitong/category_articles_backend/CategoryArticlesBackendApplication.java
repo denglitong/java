@@ -1,10 +1,12 @@
 package com.denglitong.category_articles_backend;
 
+import com.google.common.collect.Sets;
 import org.hibernate.validator.HibernateValidator;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.core.io.*;
 
 import javax.validation.Validation;
 import javax.validation.Validator;
@@ -17,10 +19,10 @@ import java.util.Collections;
  * @date 2021/10/27
  */
 @SpringBootApplication
-public class Application {
+public class CategoryArticlesBackendApplication {
 
     public static void main(String[] args) throws IOException {
-        SpringApplication app = new SpringApplication(Application.class);
+        SpringApplication app = new SpringApplication(CategoryArticlesBackendApplication.class);
         app.setDefaultProperties(Collections.singletonMap(
                 "spring.config.location", "classpath:/category_articles_backend/application.yml"
         ));

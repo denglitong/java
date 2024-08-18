@@ -1,6 +1,6 @@
 package com.denglitong.category_articles_backend.controller;
 
-import com.denglitong.category_articles_backend.Application;
+import com.denglitong.category_articles_backend.CategoryArticlesBackendApplication;
 import com.denglitong.category_articles_backend.DTO.ResponseDTO;
 import com.denglitong.category_articles_backend.DTO.UserLoginDTO;
 import com.denglitong.category_articles_backend.context.UserContext;
@@ -29,7 +29,7 @@ import static org.junit.Assert.assertNotNull;
  * @date 2021/10/30
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = Application.class)
+@SpringBootTest(classes = CategoryArticlesBackendApplication.class)
 @TestPropertySource(locations = "classpath:/category_articles_backend/application.yml")
 @OrderWith(OrderAnnotation.class)
 public class UserControllerLoginTest extends BaseControllerTest {

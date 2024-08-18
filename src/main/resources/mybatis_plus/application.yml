@@ -1,0 +1,20 @@
+# Datasource Config
+spring:
+  datasource:
+    driver-class-name: com.mysql.jdbc.Driver
+    #    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/test?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8
+    username: root
+    password: 12345678
+
+mybatis-plus:
+  configuration:
+    # 开启打印完整带参数SQL语句
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted # 全局逻辑删除的实体字段名
+      logic-delete-value: 1 # 逻辑已删除值
+      logic-not-delete-value: 0 # 逻辑未删除值
+  type-enums-package: com.denglitong.mybatis_plus.*.entity.enums
+  mapper-locations: classpath:/mybatis_plus/mapper/*/*.xml
